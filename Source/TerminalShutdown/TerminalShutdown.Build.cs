@@ -18,8 +18,10 @@ public class TerminalShutdown : ModuleRules
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",
-			"Slate"
-		});
+			"Slate",
+            "GameplayTags",
+            "DeveloperSettings"
+        });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 
@@ -30,8 +32,9 @@ public class TerminalShutdown : ModuleRules
 			"TerminalShutdown/Variant_Shooter",
 			"TerminalShutdown/Variant_Shooter/AI",
 			"TerminalShutdown/Variant_Shooter/UI",
-			"TerminalShutdown/Variant_Shooter/Weapons"
-		});
+			"TerminalShutdown/Variant_Shooter/Weapons",
+			"TerminalShutdown/EventSystem"
+        });
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
