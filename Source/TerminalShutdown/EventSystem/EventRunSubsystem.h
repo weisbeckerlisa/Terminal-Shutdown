@@ -48,7 +48,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Costs") int32 CostLand = 2;
 
 	// Skip behavior
-	UPROPERTY(EditAnywhere, Category = "Skip") float SkipEncounterChance = 0.5f; // chance an encounter happens on skip
+	UPROPERTY(EditAnywhere, Category = "Skip") float SkipEncounterChance = 0.4f; // chance an encounter happens on skip
 	UPROPERTY(EditAnywhere, Category = "Skip") float SkipBasePn = 0.65f;          // if skip encounter happens, base negative chance
 
 	// Runtime API
@@ -57,10 +57,14 @@ public:
 
 	UFUNCTION(BlueprintCallable) bool Scout(UShipStateComponent* Ship, EPlanetSide Side, TArray<FText>& OutLogs);
 	UFUNCTION(BlueprintCallable) bool Choose(UShipStateComponent* Ship, ERunChoice Choice, TArray<FText>& OutLogs);
+	UFUNCTION(BlueprintCallable) bool IsRunEnded() const { return bRunEnded; }
+	UFUNCTION(BlueprintCallable) FText GetEndReason() const { return EndReason; }
 
 private:
 	UPROPERTY() TObjectPtr<UEventDatabase> DB = nullptr;
 	UPROPERTY() FRunNode Current;
+	UPROPERTY() bool bRunEnded = false;
+	UPROPERTY() FText EndReason;
 	FRandomStream Rng;
 
 	void LoadDatabase();

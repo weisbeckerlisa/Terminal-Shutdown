@@ -40,7 +40,8 @@ void UEventRunSubsystem::StartRun(int32 Seed)
 	Rng.Initialize(Seed);
 	Current = FRunNode{};
 	Current.StepIndex = 0;
-
+	bRunEnded = false;
+	EndReason = FText::GetEmpty();
 	GenerateCurrentNode();
 }
 
@@ -71,11 +72,19 @@ void UEventRunSubsystem::GenerateCurrentNode()
 
 FRunNodeView UEventRunSubsystem::GetCurrentNodeView(UShipStateComponent* Ship) const
 {
+	if (bRunEnded)
+	{
+		FRunNodeView View;
+		View.PlanetA.Label = FText::FromString(TEXT("RUN ENDED"));
+		View.PlanetA.Preview = EndReason;
+		return View;
+	}
 	FRunNodeView View;
 
 	// Planet A
 	View.PlanetA.Label = FText::FromString(TEXT("Planet A"));
 	View.PlanetA.Preview = Current.PlanetA ? Current.PlanetA->PlanetPreviewDescription : FText::FromString(TEXT("No planet"));
+	View.PlanetA.GeneralHint = Current.PlanetA && Current.PlanetA->Encounter ? Current.PlanetA->Encounter->GeneralHint : FText::FromString(TEXT("No encounter"));
 	View.PlanetA.EnergyCost = CostLand;
 	View.PlanetA.bCanScout = true;
 	View.PlanetA.bScouted = (Current.LockedA != EOutcome::Unknown);
@@ -90,6 +99,7 @@ FRunNodeView UEventRunSubsystem::GetCurrentNodeView(UShipStateComponent* Ship) c
 	// Planet B
 	View.PlanetB.Label = FText::FromString(TEXT("Planet B"));
 	View.PlanetB.Preview = Current.PlanetB ? Current.PlanetB->PlanetPreviewDescription : FText::FromString(TEXT("No planet"));
+	View.PlanetB.GeneralHint = Current.PlanetB && Current.PlanetB->Encounter ? Current.PlanetB->Encounter->GeneralHint : FText::FromString(TEXT("No encounter"));
 	View.PlanetB.EnergyCost = CostLand;
 	View.PlanetB.bCanScout = true;
 	View.PlanetB.bScouted = (Current.LockedB != EOutcome::Unknown);
@@ -137,6 +147,11 @@ EOutcome UEventRunSubsystem::RollOutcome(float PnAdjusted, FRandomStream& Stream
 
 bool UEventRunSubsystem::Scout(UShipStateComponent* Ship, EPlanetSide Side, TArray<FText>& OutLogs)
 {
+	if (bRunEnded)
+	{
+		OutLogs.Add(FText::FromString(TEXT("Run already ended.")));
+		return false;
+	}
 	LoadDatabase();
 	if (!DB || !Ship) return false;
 	if (Ship->Energy < CostScout) return false;
@@ -169,8 +184,8 @@ void UEventRunSubsystem::ApplyRules(const TArray<FConditionalEffectRule>& Rules,
 
 		if (!bMatches) continue;
 
-		Ship->Energy += Rule.Effect.EnergyDelta;
-		Ship->Damage += Rule.Effect.DamageDelta;
+		Ship->Energy = FMath::Clamp(Ship->Energy + Rule.Effect.EnergyDelta, -5, MaxEnergy);
+		Ship->Damage = FMath::Clamp(Ship->Damage + Rule.Effect.DamageDelta, 0, 3);
 
 		for (const FText& L : Rule.ExtraLogs)
 			OutLogs.Add(L);
@@ -197,11 +212,19 @@ void UEventRunSubsystem::ApplyOutcome(const UEncounterDefinition* Encounter, EOu
 
 bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TArray<FText>& OutLogs)
 {
+	if (bRunEnded)
+	{
+		OutLogs.Add(FText::FromString(TEXT("Run already ended.")));
+		return false;
+	}
+
 	LoadDatabase();
 	if (!DB || !Ship) return false;
 
 	// energy costs
-	const int32 Cost = (Choice == ERunChoice::Skip) ? CostSkip : CostLand;
+	const int32 BaseCost = (Choice == ERunChoice::Skip) ? CostSkip : CostLand;
+	const int32 ModuleCost = Ship->ActiveModules.Num();
+	const int32 Cost = BaseCost + ModuleCost;
 	if (Ship->Energy < Cost) return false;
 	Ship->Energy -= Cost;
 
@@ -239,6 +262,31 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 
 		OutLogs.Add(FText::FromString(TEXT("[LANDING]")));
 		ApplyOutcome(Planet->Encounter, Locked, Ship, OutLogs);
+	}
+
+	Ship->StepsCompleted++;
+	if (Ship->IsGameWon())
+	{
+		bRunEnded = true;
+		EndReason = FText::FromString(TEXT("MISSION COMPLETE: You reached Earth !"));
+		OutLogs.Add(EndReason);
+		return true;
+	}
+
+	if (Ship->Damage >= 3)
+	{
+		bRunEnded = true;
+		EndReason = FText::FromString(TEXT("GAME OVER: The ship is too damaged to continue."));
+		OutLogs.Add(EndReason);
+		return true;
+	}
+
+	if (Ship->Energy <= 0)
+	{
+		bRunEnded = true;
+		EndReason = FText::FromString(TEXT("GAME OVER: You ran out of energy. All systems Shutdown."));
+		OutLogs.Add(EndReason);
+		return true;
 	}
 
 	Current.StepIndex++;

@@ -20,6 +20,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship")
 	FGameplayTagContainer ActiveModules; // e.g. Module.Turret, Module.Shield
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship")
+	int32 StepsCompleted = 0;
+
 	UFUNCTION(BlueprintCallable, Category = "Ship")
-	bool IsGameOver() const { return Damage >= 3 || Energy <= 0; }
+	bool IsGameOver() const { return Damage >= 3 || Energy < 0; }
+
+	UFUNCTION(BlueprintCallable, Category = "Ship")
+	bool IsGameWon() const { return StepsCompleted >= 10; }
+
 };

@@ -18,6 +18,7 @@ struct FRunOptionView
 
 	UPROPERTY(BlueprintReadOnly) FText Label;
 	UPROPERTY(BlueprintReadOnly) FText Preview;      // planet preview or skip preview
+	UPROPERTY(BlueprintReadOnly) FText GeneralHint;
 	UPROPERTY(BlueprintReadOnly) int32 EnergyCost = 0;
 	UPROPERTY(BlueprintReadOnly) bool bCanScout = false;
 	UPROPERTY(BlueprintReadOnly) bool bScouted = false;
