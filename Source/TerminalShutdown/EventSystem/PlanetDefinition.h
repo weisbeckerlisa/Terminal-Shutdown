@@ -19,15 +19,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	FText PlanetPreviewDescription;
 
-	// Base probability of Negative outcome on this planet (before dynamic adjustment)
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float BasePn = 0.4f;
-
-	// Points to a paired encounter (positive/negative variants)
+	// Biome filter
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	TObjectPtr<UEncounterDefinition> Encounter;
+	FGameplayTag BiomeTag;
 
-	// Optional: for generator filtering
+	// Image shown in UI for this planet
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	FGameplayTagContainer PlanetTags;
+	TObjectPtr<UTexture2D> PlanetImage;
 };

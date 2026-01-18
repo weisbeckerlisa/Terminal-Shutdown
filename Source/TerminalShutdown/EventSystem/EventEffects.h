@@ -13,11 +13,11 @@ struct FEventEffect
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	int32 EnergyDelta = 0;
 
-	// +1 means take 1 damage. You cap at 3 (game over handled elsewhere).
+	// +1 means take 1 damage.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	int32 DamageDelta = 0;
 
-	// Optional: allow tagging persistent states (e.g., "Ship.Status.Leaking")
+	// For later: status effects, module changes, etc.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	FGameplayTagContainer AddTags;
 
@@ -37,7 +37,7 @@ struct FConditionalEffectRule
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	FEventEffect Effect;
 
-	// Optional extra log lines if this rule triggers
+	// Extra log lines if this rule triggers
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	TArray<FText> ExtraLogs;
 };

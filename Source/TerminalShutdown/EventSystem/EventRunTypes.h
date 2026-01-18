@@ -23,6 +23,7 @@ struct FRunOptionView
 	UPROPERTY(BlueprintReadOnly) bool bCanScout = false;
 	UPROPERTY(BlueprintReadOnly) bool bScouted = false;
 	UPROPERTY(BlueprintReadOnly) FText ScoutInfo;   // filled after scouting
+	UPROPERTY(BlueprintReadOnly) TObjectPtr<UTexture2D> Image;
 };
 
 USTRUCT(BlueprintType)

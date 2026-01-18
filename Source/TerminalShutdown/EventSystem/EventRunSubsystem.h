@@ -19,17 +19,19 @@ struct FRunNode
 	UPROPERTY() TObjectPtr<const UPlanetDefinition> PlanetA = nullptr;
 	UPROPERTY() TObjectPtr<const UPlanetDefinition> PlanetB = nullptr;
 
+	// Encounter based on planet biome
+	UPROPERTY() TObjectPtr<const UEncounterDefinition> EncounterA = nullptr;
+	UPROPERTY() TObjectPtr<const UEncounterDefinition> EncounterB = nullptr;
+
 	// Locked outcomes after scouting
 	UPROPERTY() EOutcome LockedA = EOutcome::Unknown;
 	UPROPERTY() EOutcome LockedB = EOutcome::Unknown;
 
 	// Optional: store what skip encounter rolled this step
 	UPROPERTY() TObjectPtr<const UEncounterDefinition> SkipEncounter = nullptr;
-
-	UPROPERTY() int32 StepIndex = 0;
 };
 
-UCLASS()
+UCLASS(BlueprintType)
 class TERMINALSHUTDOWN_API UEventRunSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()

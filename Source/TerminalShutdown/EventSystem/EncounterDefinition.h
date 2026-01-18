@@ -17,7 +17,15 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	FGameplayTag EncounterTag;
 
-	// General hint shown BEFORE scouting/landing (planet preview)
+	// Base probability of Negative outcome on this event (before dynamic adjustment)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float BasePn = 0.4f;
+
+	// Biome filter
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	FGameplayTag BiomeTag;
+
+	// General hint shown before scouting/landing
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	FText GeneralHint;
 
@@ -26,4 +34,6 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	FOutcomeDefinition Negative;
+
+
 };

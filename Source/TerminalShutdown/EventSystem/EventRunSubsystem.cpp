@@ -39,11 +39,31 @@ void UEventRunSubsystem::StartRun(int32 Seed)
 
 	Rng.Initialize(Seed);
 	Current = FRunNode{};
-	Current.StepIndex = 0;
 	bRunEnded = false;
 	EndReason = FText::GetEmpty();
 	GenerateCurrentNode();
 }
+
+static const UEncounterDefinition* PickEncounterForBiome(
+	const TArray<TObjectPtr<UEncounterDefinition>>& All,
+	const FGameplayTag Biome,
+	FRandomStream& Rng)
+{
+	TArray<const UEncounterDefinition*> Candidates;
+
+	for (const TObjectPtr<UEncounterDefinition>& EPtr : All)
+	{
+		const UEncounterDefinition* E = EPtr.Get();
+		if (E && E->BiomeTag == Biome)
+		{
+			Candidates.Add(E);
+		}
+	}
+
+	if (Candidates.Num() == 0) return nullptr;
+	return Candidates[Rng.RandRange(0, Candidates.Num() - 1)];
+}
+
 
 void UEventRunSubsystem::GenerateCurrentNode()
 {
@@ -65,6 +85,8 @@ void UEventRunSubsystem::GenerateCurrentNode()
 
 	Current.PlanetA = DB->Planets[IndexA];
 	Current.PlanetB = DB->Planets[IndexB];
+	Current.EncounterA = PickEncounterForBiome(DB->PlanetEncounters, Current.PlanetA->BiomeTag, Rng);
+	Current.EncounterB = PickEncounterForBiome(DB->PlanetEncounters, Current.PlanetB->BiomeTag, Rng);
 	Current.LockedA = EOutcome::Unknown;
 	Current.LockedB = EOutcome::Unknown;
 	Current.SkipEncounter = nullptr;
@@ -82,12 +104,13 @@ FRunNodeView UEventRunSubsystem::GetCurrentNodeView(UShipStateComponent* Ship) c
 	FRunNodeView View;
 
 	// Planet A
-	View.PlanetA.Label = FText::FromString(TEXT("Planet A"));
+	View.PlanetA.Label = Current.PlanetA ? Current.PlanetA->PlanetName : FText::FromString(TEXT("Planet A"));
 	View.PlanetA.Preview = Current.PlanetA ? Current.PlanetA->PlanetPreviewDescription : FText::FromString(TEXT("No planet"));
-	View.PlanetA.GeneralHint = Current.PlanetA && Current.PlanetA->Encounter ? Current.PlanetA->Encounter->GeneralHint : FText::FromString(TEXT("No encounter"));
+	View.PlanetA.GeneralHint = Current.EncounterA ? Current.EncounterA->GeneralHint : FText::FromString(TEXT("No encounter"));
 	View.PlanetA.EnergyCost = CostLand;
 	View.PlanetA.bCanScout = true;
 	View.PlanetA.bScouted = (Current.LockedA != EOutcome::Unknown);
+	View.PlanetA.Image = Current.PlanetA ? Current.PlanetA->PlanetImage : nullptr;
 
 	// Skip
 	View.Skip.Label = FText::FromString(TEXT("Skip"));
@@ -97,22 +120,23 @@ FRunNodeView UEventRunSubsystem::GetCurrentNodeView(UShipStateComponent* Ship) c
 	View.Skip.bScouted = false;
 
 	// Planet B
-	View.PlanetB.Label = FText::FromString(TEXT("Planet B"));
+	View.PlanetB.Label = Current.PlanetB ? Current.PlanetB->PlanetName : FText::FromString(TEXT("Planet B"));
 	View.PlanetB.Preview = Current.PlanetB ? Current.PlanetB->PlanetPreviewDescription : FText::FromString(TEXT("No planet"));
-	View.PlanetB.GeneralHint = Current.PlanetB && Current.PlanetB->Encounter ? Current.PlanetB->Encounter->GeneralHint : FText::FromString(TEXT("No encounter"));
+	View.PlanetB.GeneralHint = Current.EncounterB ? Current.EncounterB->GeneralHint : FText::FromString(TEXT("No encounter"));
 	View.PlanetB.EnergyCost = CostLand;
 	View.PlanetB.bCanScout = true;
 	View.PlanetB.bScouted = (Current.LockedB != EOutcome::Unknown);
+	View.PlanetB.Image = Current.PlanetB ? Current.PlanetB->PlanetImage : nullptr;
 
 	// If already scouted, show the precise scout description
-	if (Current.PlanetA && Current.PlanetA->Encounter && Current.LockedA != EOutcome::Unknown)
+	if (Current.EncounterA && Current.LockedA != EOutcome::Unknown)
 	{
-		const auto& OutcomeDef = (Current.LockedA == EOutcome::Negative) ? Current.PlanetA->Encounter->Negative : Current.PlanetA->Encounter->Positive;
+		const auto& OutcomeDef = (Current.LockedA == EOutcome::Negative) ? Current.EncounterA->Negative : Current.EncounterA->Positive;
 		View.PlanetA.ScoutInfo = OutcomeDef.ScoutDescription;
 	}
-	if (Current.PlanetB && Current.PlanetB->Encounter && Current.LockedB != EOutcome::Unknown)
+	if (Current.EncounterB && Current.LockedB != EOutcome::Unknown)
 	{
-		const auto& OutcomeDef = (Current.LockedB == EOutcome::Negative) ? Current.PlanetB->Encounter->Negative : Current.PlanetB->Encounter->Positive;
+		const auto& OutcomeDef = (Current.LockedB == EOutcome::Negative) ? Current.EncounterB->Negative : Current.EncounterB->Positive;
 		View.PlanetB.ScoutInfo = OutcomeDef.ScoutDescription;
 	}
 
@@ -126,7 +150,7 @@ float UEventRunSubsystem::ComputeAdjustedPn(float BasePn, const UShipStateCompon
 	const float XEnergy = FMath::Clamp(1.0f - ((float)Ship->Energy / (float)MaxEnergy), 0.f, 1.f);
 	const float S = WDmg * XDmg + WEnergy * XEnergy;
 
-	// logit(BasePn)
+	// logit
 	const float P = FMath::Clamp(BasePn, 0.001f, 0.999f);
 	const float L0 = FMath::Loge(P / (1.0f - P));
 
@@ -156,18 +180,17 @@ bool UEventRunSubsystem::Scout(UShipStateComponent* Ship, EPlanetSide Side, TArr
 	if (!DB || !Ship) return false;
 	if (Ship->Energy < CostScout) return false;
 
-	const UPlanetDefinition* Planet = (Side == EPlanetSide::A) ? Current.PlanetA : Current.PlanetB;
-	if (!Planet || !Planet->Encounter) return false;
+	const UEncounterDefinition* Encounter = (Side == EPlanetSide::A) ? Current.EncounterA : Current.EncounterB;
 
 	EOutcome& Locked = (Side == EPlanetSide::A) ? Current.LockedA : Current.LockedB;
 	if (Locked != EOutcome::Unknown) return true; // already scouted
 
 	Ship->Energy -= CostScout;
 
-	const float PnAdj = ComputeAdjustedPn(Planet->BasePn, Ship, /*ActionMultiplier*/0.7f);
+	const float PnAdj = ComputeAdjustedPn(Encounter->BasePn, Ship, 0.7f);
 	Locked = RollOutcome(PnAdj, Rng);
 
-	const FOutcomeDefinition& Def = (Locked == EOutcome::Negative) ? Planet->Encounter->Negative : Planet->Encounter->Positive;
+	const FOutcomeDefinition& Def = (Locked == EOutcome::Negative) ? Encounter->Negative : Encounter->Positive;
 	OutLogs.Add(FText::FromString(TEXT("[SCOUT] ")));
 	OutLogs.Add(Def.ScoutDescription);
 
@@ -236,7 +259,7 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 			const int32 Idx = Rng.RandRange(0, DB->TravelEncounters.Num() - 1);
 			Current.SkipEncounter = DB->TravelEncounters[Idx];
 
-			const float PnAdj = ComputeAdjustedPn(SkipBasePn, Ship, 0.3f); // ActionMultiplier=0.3 for skip
+			const float PnAdj = ComputeAdjustedPn(SkipBasePn, Ship, 0.5f);
 			const EOutcome Outcome = RollOutcome(PnAdj, Rng);
 
 			OutLogs.Add(FText::FromString(TEXT("[SKIP EVENT]")));
@@ -250,18 +273,17 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 	else
 	{
 		const bool bA = (Choice == ERunChoice::PlanetA);
-		const UPlanetDefinition* Planet = bA ? Current.PlanetA : Current.PlanetB;
-		if (!Planet || !Planet->Encounter) return false;
+		const UEncounterDefinition* Encounter = bA ? Current.EncounterA : Current.EncounterB;
 
 		EOutcome Locked = bA ? Current.LockedA : Current.LockedB;
 		if (Locked == EOutcome::Unknown)
 		{
-			const float PnAdj = ComputeAdjustedPn(Planet->BasePn, Ship, /*ActionMultiplier*/1.0f);
+			const float PnAdj = ComputeAdjustedPn(Encounter->BasePn, Ship, 1.0f);
 			Locked = RollOutcome(PnAdj, Rng);
 		}
 
 		OutLogs.Add(FText::FromString(TEXT("[LANDING]")));
-		ApplyOutcome(Planet->Encounter, Locked, Ship, OutLogs);
+		ApplyOutcome(Encounter, Locked, Ship, OutLogs);
 	}
 
 	Ship->StepsCompleted++;
@@ -289,7 +311,6 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 		return true;
 	}
 
-	Current.StepIndex++;
 	GenerateCurrentNode();
 	return true;
 }
