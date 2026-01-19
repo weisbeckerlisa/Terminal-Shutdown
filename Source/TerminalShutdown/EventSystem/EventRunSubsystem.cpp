@@ -199,7 +199,7 @@ bool UEventRunSubsystem::Scout(UShipStateComponent* Ship, EPlanetSide Side, TArr
 
 void UEventRunSubsystem::ApplyRules(const TArray<FConditionalEffectRule>& Rules, const FGameplayTagContainer& Modules, UShipStateComponent* Ship, TArray<FText>& OutLogs) const
 {
-	// First-match semantics: apply first rule whose condition matches (or empty = always)
+	// Apply first rule whose condition matches (or empty = always)
 	for (const FConditionalEffectRule& Rule : Rules)
 	{
 		const bool bConditionEmpty = Rule.Condition.IsEmpty();

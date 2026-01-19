@@ -13,7 +13,6 @@ struct FEventEffect
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	int32 EnergyDelta = 0;
 
-	// +1 means take 1 damage.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	int32 DamageDelta = 0;
 
@@ -30,7 +29,7 @@ struct FConditionalEffectRule
 {
 	GENERATED_BODY()
 
-	// If empty, considered "always true"
+	// If empty then always true
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	FGameplayTagQuery Condition;
 

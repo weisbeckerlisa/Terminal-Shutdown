@@ -18,7 +18,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	TArray<TObjectPtr<UEncounterDefinition>> PlanetEncounters;
 
-	// Skip hazards
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	TArray<TObjectPtr<UEncounterDefinition>> TravelEncounters;
 };
