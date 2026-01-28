@@ -176,6 +176,11 @@ bool UEventRunSubsystem::Scout(UShipStateComponent* Ship, EPlanetSide Side, TArr
 		OutLogs.Add(FText::FromString(TEXT("Run already ended.")));
 		return false;
 	}
+	if (bWaitingMinigame)
+	{
+		OutLogs.Add(FText::FromString(TEXT("Mini-game in progress. Finish it before scouting.")));
+		return false;
+	}
 	LoadDatabase();
 	if (!DB || !Ship) return false;
 	if (Ship->Energy < CostScout) return false;
@@ -240,6 +245,11 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 		OutLogs.Add(FText::FromString(TEXT("Run already ended.")));
 		return false;
 	}
+	if (bWaitingMinigame)
+	{
+		OutLogs.Add(FText::FromString(TEXT("Mini-game in progress. Finish it before choosing.")));
+		return false;
+	}
 
 	LoadDatabase();
 	if (!DB || !Ship) return false;
@@ -283,16 +293,117 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 		}
 
 		OutLogs.Add(FText::FromString(TEXT("[LANDING]")));
+		if (Encounter && Encounter->MiniGame)
+		{
+			// Start mini-game and pause run progression.
+			StartMiniGameInternal(Encounter, bA ? EPlanetSide::A : EPlanetSide::B, Ship);
+			OutLogs.Add(FText::FromString(TEXT("Mini-game started.")));
+			return true;
+		}
+
+		// No mini-game: resolve normally
 		ApplyOutcome(Encounter, Locked, Ship, OutLogs);
+
 	}
 
+	FinalizeStepAndAdvance(Ship, OutLogs);
+	return true;
+}
+
+void UEventRunSubsystem::StartMiniGameInternal(const UEncounterDefinition* Encounter, EPlanetSide Side, UShipStateComponent* Ship)
+{
+	if (!Encounter || !Encounter->MiniGame || !Ship) return;
+
+	bWaitingMinigame = true;
+
+	PendingEncounter = Encounter;
+	PendingSide = Side;
+	PendingShip = Ship;
+
+	CurrentMiniGame = FMiniGameContext{};
+	CurrentMiniGame.Definition = Encounter->MiniGame;
+	CurrentMiniGame.TimeLimit = Encounter->MiniGame->TimeLimit;
+	CurrentMiniGame.TimeRemaining = CurrentMiniGame.TimeLimit;
+	CurrentMiniGame.Side = Side;
+
+	// Fire event
+	OnMiniGameStarted.Broadcast(CurrentMiniGame);
+
+	// Setup timeout
+	if (UWorld* W = GetWorld())
+	{
+		W->GetTimerManager().ClearTimer(MiniGameTimeoutHandle);
+		W->GetTimerManager().SetTimer(
+			MiniGameTimeoutHandle,
+			this,
+			&UEventRunSubsystem::HandleMiniGameTimeout,
+			CurrentMiniGame.TimeLimit,
+			false
+		);
+	}
+}
+
+void UEventRunSubsystem::HandleMiniGameTimeout()
+{
+	if (!bWaitingMinigame) return;
+
+	TArray<FText> DummyLogs;
+	ResolveMiniGameInternal(EMiniGameResult::Timeout, DummyLogs);
+
+}
+
+bool UEventRunSubsystem::CompleteMiniGame(EMiniGameResult Result, TArray<FText>& OutLogs)
+{
+	if (!bWaitingMinigame) return false;
+
+	ResolveMiniGameInternal(Result, OutLogs);
+
+	return true;
+}
+
+void UEventRunSubsystem::ResolveMiniGameInternal(EMiniGameResult Result, TArray<FText>& OutLogs)
+{
+	if (!PendingEncounter || !PendingShip) return;
+
+	// Stop timer
+	if (UWorld* W = GetWorld())
+	{
+		W->GetTimerManager().ClearTimer(MiniGameTimeoutHandle);
+	}
+
+	// Decide outcome: Success -> Positive, Fail/Timeout -> Negative
+	const EOutcome Outcome = (Result == EMiniGameResult::Success) ? EOutcome::Positive : EOutcome::Negative;
+
+	OutLogs.Add(FText::FromString(TEXT("[MINI-GAME RESOLVED]")));
+	if (Result == EMiniGameResult::Success) OutLogs.Add(FText::FromString(TEXT("Success.")));
+	else if (Result == EMiniGameResult::Timeout) OutLogs.Add(FText::FromString(TEXT("Timeout.")));
+	else OutLogs.Add(FText::FromString(TEXT("Failed.")));
+
+	UShipStateComponent* Ship = PendingShip;
+
+	ApplyOutcome(PendingEncounter, Outcome, Ship, OutLogs);
+
+	bWaitingMinigame = false;
+	OnMiniGameEnded.Broadcast(Result, OutLogs);
+
+	PendingEncounter = nullptr;
+	PendingShip = nullptr;
+
+	FinalizeStepAndAdvance(Ship, OutLogs);
+}
+
+void UEventRunSubsystem::FinalizeStepAndAdvance(UShipStateComponent* Ship, TArray<FText>& OutLogs)
+{
+	if (!Ship) return;
+
 	Ship->StepsCompleted++;
+
 	if (Ship->IsGameWon())
 	{
 		bRunEnded = true;
 		EndReason = FText::FromString(TEXT("MISSION COMPLETE: You reached Earth !"));
 		OutLogs.Add(EndReason);
-		return true;
+		return;
 	}
 
 	if (Ship->Damage >= 3)
@@ -300,7 +411,7 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 		bRunEnded = true;
 		EndReason = FText::FromString(TEXT("GAME OVER: The ship is too damaged to continue."));
 		OutLogs.Add(EndReason);
-		return true;
+		return;
 	}
 
 	if (Ship->Energy <= 0)
@@ -308,9 +419,8 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 		bRunEnded = true;
 		EndReason = FText::FromString(TEXT("GAME OVER: You ran out of energy. All systems Shutdown."));
 		OutLogs.Add(EndReason);
-		return true;
+		return;
 	}
 
 	GenerateCurrentNode();
-	return true;
 }

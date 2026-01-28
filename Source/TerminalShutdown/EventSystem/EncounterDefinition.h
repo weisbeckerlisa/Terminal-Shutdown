@@ -4,6 +4,7 @@
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
 #include "EventEffects.h"
+#include "MiniGameDefinition.h"
 #include "EncounterDefinition.generated.h"
 
 // One "theme" with 2 complementary outcomes: Positive and Negative.
@@ -13,9 +14,6 @@ class UEncounterDefinition : public UPrimaryDataAsset
 	GENERATED_BODY()
 
 public:
-	// For filtering / analytics / balancing
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	FGameplayTag EncounterTag;
 
 	// Base probability of Negative outcome on this event (before dynamic adjustment)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "1.0"))
@@ -35,5 +33,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	FOutcomeDefinition Negative;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	UMiniGameDefinition* MiniGame = nullptr;
 
 };

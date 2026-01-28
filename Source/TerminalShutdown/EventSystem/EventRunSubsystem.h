@@ -1,9 +1,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/ScriptDelegates.h"
+#include "TimerManager.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "EventRunTypes.h"
 #include "GameplayTagContainer.h"
+#include "MiniGameTypes.h"
+
 #include "EventRunSubsystem.generated.h"
 
 class UEventDatabase;
@@ -31,6 +35,9 @@ struct FRunNode
 	UPROPERTY() TObjectPtr<const UEncounterDefinition> SkipEncounter = nullptr;
 };
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMiniGameStarted, const FMiniGameContext&, Context);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnMiniGameEnded, EMiniGameResult, Result, const TArray<FText>&, Logs);
+
 UCLASS(BlueprintType)
 class TERMINALSHUTDOWN_API UEventRunSubsystem : public UGameInstanceSubsystem
 {
@@ -53,6 +60,21 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Skip") float SkipEncounterChance = 0.4f; // chance an encounter happens on skip
 	UPROPERTY(EditAnywhere, Category = "Skip") float SkipBasePn = 0.65f;          // if skip encounter happens, base negative chance
 
+	UPROPERTY(BlueprintAssignable, Category = "MiniGame")
+	FOnMiniGameStarted OnMiniGameStarted;
+
+	UPROPERTY(BlueprintAssignable, Category = "MiniGame")
+	FOnMiniGameEnded OnMiniGameEnded;
+
+	UFUNCTION(BlueprintCallable, Category = "MiniGame")
+	bool IsWaitingMiniGame() const { return bWaitingMinigame; }
+
+	UFUNCTION(BlueprintCallable, Category = "MiniGame")
+	FMiniGameContext GetMiniGameContext() const { return CurrentMiniGame; }
+
+	UFUNCTION(BlueprintCallable, Category = "MiniGame")
+	bool CompleteMiniGame(EMiniGameResult Result, TArray<FText>& OutLogs);
+
 	// Runtime API
 	UFUNCTION(BlueprintCallable) void StartRun(int32 Seed);
 	UFUNCTION(BlueprintCallable) FRunNodeView GetCurrentNodeView(UShipStateComponent* Ship) const;
@@ -69,6 +91,23 @@ private:
 	UPROPERTY() FText EndReason;
 	FRandomStream Rng;
 
+	UPROPERTY() bool bWaitingMinigame = false;
+	UPROPERTY() FMiniGameContext CurrentMiniGame;
+
+	// Pending encounter that is waiting for mini-game resolution
+	UPROPERTY() TObjectPtr<const UEncounterDefinition> PendingEncounter = nullptr;
+	UPROPERTY() EPlanetSide PendingSide = EPlanetSide::A;
+	UPROPERTY() TObjectPtr<UShipStateComponent> PendingShip = nullptr;
+
+	FTimerHandle MiniGameTimeoutHandle;
+
+
+	void StartMiniGameInternal(const UEncounterDefinition* Encounter, EPlanetSide Side, UShipStateComponent* Ship);
+	void ResolveMiniGameInternal(EMiniGameResult Result, TArray<FText>& OutLogs);
+	void HandleMiniGameTimeout();
+
+	void FinalizeStepAndAdvance(UShipStateComponent* Ship, TArray<FText>& OutLogs);
+
 	void LoadDatabase();
 	void GenerateCurrentNode();
 
@@ -78,4 +117,5 @@ private:
 
 	void ApplyOutcome(const UEncounterDefinition* Encounter, EOutcome Outcome, UShipStateComponent* Ship, TArray<FText>& OutLogs) const;
 	void ApplyRules(const TArray<struct FConditionalEffectRule>& Rules, const FGameplayTagContainer& Modules, UShipStateComponent* Ship, TArray<FText>& OutLogs) const;
+
 };
