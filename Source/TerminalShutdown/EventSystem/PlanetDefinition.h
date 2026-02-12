@@ -26,4 +26,8 @@ public:
 	// Image shown in UI for this planet
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	TObjectPtr<UTexture2D> PlanetImage;
+
+	// Image shown in space for this planet
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	TObjectPtr<UTexture2D> PlanetSpaceImage;
 };

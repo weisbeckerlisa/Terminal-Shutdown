@@ -7,6 +7,8 @@
 
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnShipStateChanged);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnVitalsChanged);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSuppliesChanged);
 
 
 UCLASS(ClassGroup = (Game), meta = (BlueprintSpawnableComponent))
@@ -45,5 +47,35 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ship|Modules")
 	bool IsModuleEnabled(FGameplayTag ModuleTag) const;
 
+	// Player vitals and supplies
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
+	int32 FoodUnits = 3; // start at 3, max 10, min 0
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
+	int32 WaterUnits = 5; // start at 3, max 15, min 0
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
+	float Hunger = 100.f; // 0..100
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
+	float Thirst = 100.f; // 0..100
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
+	float HungerPerDay = 15.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
+	float ThirstPerDay = 30.f;
+	
+	void AdvanceDay(int32 days = 1);
+
+	bool ConsumeFood(float RestoreAmount = 30.f);
+
+	bool ConsumeWater(float RestoreAmount = 50.f);
+
+	UPROPERTY(BlueprintAssignable, Category = "Ship|Vitals")
+	FOnVitalsChanged OnVitalsChanged; 
+	
+	UPROPERTY(BlueprintAssignable, Category = "Ship|Vitals") 
+	FOnSuppliesChanged OnSuppliesChanged;
 
 };

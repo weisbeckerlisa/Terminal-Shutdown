@@ -111,6 +111,7 @@ FRunNodeView UEventRunSubsystem::GetCurrentNodeView(UShipStateComponent* Ship) c
 	View.PlanetA.bCanScout = true;
 	View.PlanetA.bScouted = (Current.LockedA != EOutcome::Unknown);
 	View.PlanetA.Image = Current.PlanetA ? Current.PlanetA->PlanetImage : nullptr;
+	View.PlanetA.SpaceImage = Current.PlanetA ? Current.PlanetA->PlanetSpaceImage : nullptr;
 
 	// Skip
 	View.Skip.Label = FText::FromString(TEXT("Skip"));
@@ -127,6 +128,7 @@ FRunNodeView UEventRunSubsystem::GetCurrentNodeView(UShipStateComponent* Ship) c
 	View.PlanetB.bCanScout = true;
 	View.PlanetB.bScouted = (Current.LockedB != EOutcome::Unknown);
 	View.PlanetB.Image = Current.PlanetB ? Current.PlanetB->PlanetImage : nullptr;
+	View.PlanetB.SpaceImage = Current.PlanetB ? Current.PlanetB->PlanetSpaceImage : nullptr;
 
 	// If already scouted, show the precise scout description
 	if (Current.EncounterA && Current.LockedA != EOutcome::Unknown)
