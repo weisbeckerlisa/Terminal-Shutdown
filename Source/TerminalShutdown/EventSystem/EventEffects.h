@@ -16,6 +16,12 @@ struct FEventEffect
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	int32 DamageDelta = 0;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	int32 FoodDelta = 0;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	int32 WaterDelta = 0;
+
 	// For later: status effects, module changes, etc.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
 	FGameplayTagContainer AddTags;

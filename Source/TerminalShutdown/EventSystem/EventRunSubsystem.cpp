@@ -216,6 +216,8 @@ void UEventRunSubsystem::ApplyRules(const TArray<FConditionalEffectRule>& Rules,
 
 		Ship->Energy = FMath::Clamp(Ship->Energy + Rule.Effect.EnergyDelta, -5, MaxEnergy);
 		Ship->Damage = FMath::Clamp(Ship->Damage + Rule.Effect.DamageDelta, 0, 3);
+		Ship->FoodUnits = FMath::Clamp(Ship->FoodUnits + Rule.Effect.FoodDelta, 0, MaxFoodUnits);
+		Ship->WaterUnits = FMath::Clamp(Ship->WaterUnits + Rule.Effect.WaterDelta, 0, MaxWaterUnits);
 
 		for (const FText& L : Rule.ExtraLogs)
 			OutLogs.Add(L);
@@ -399,6 +401,7 @@ void UEventRunSubsystem::FinalizeStepAndAdvance(UShipStateComponent* Ship, TArra
 	if (!Ship) return;
 
 	Ship->StepsCompleted++;
+	Ship->AdvanceDay(1);
 
 	if (Ship->IsGameWon())
 	{

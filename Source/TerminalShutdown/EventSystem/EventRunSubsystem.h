@@ -50,6 +50,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Balancing") float WEnergy = 0.4f;   // weight energy
 	UPROPERTY(EditAnywhere, Category = "Balancing") float STarget = 0.5f;   // target tension
 	UPROPERTY(EditAnywhere, Category = "Balancing") int32 MaxEnergy = 20;
+	UPROPERTY(EditAnywhere, Category = "Balancing") int32 MaxFoodUnits = 16;
+	UPROPERTY(EditAnywhere, Category = "Balancing") int32 MaxWaterUnits = 16;
 
 	// Costs
 	UPROPERTY(EditAnywhere, Category = "Costs") int32 CostSkip = 1;

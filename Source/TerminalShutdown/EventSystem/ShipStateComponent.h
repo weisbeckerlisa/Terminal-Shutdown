@@ -49,10 +49,10 @@ public:
 
 	// Player vitals and supplies
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	int32 FoodUnits = 3; // start at 3, max 10, min 0
+	int32 FoodUnits = 15; // start at 3, max 16, min 0
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	int32 WaterUnits = 5; // start at 3, max 15, min 0
+	int32 WaterUnits = 16; // start at 3, max 16, min 0
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
 	float Hunger = 100.f; // 0..100
@@ -66,10 +66,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
 	float ThirstPerDay = 30.f;
 	
+	UFUNCTION(BlueprintCallable, Category = "Ship|Vitals")
 	void AdvanceDay(int32 days = 1);
 
+	UFUNCTION(BlueprintCallable, Category = "Ship|Vitals")
 	bool ConsumeFood(float RestoreAmount = 30.f);
 
+	UFUNCTION(BlueprintCallable, Category = "Ship|Vitals")
 	bool ConsumeWater(float RestoreAmount = 50.f);
 
 	UPROPERTY(BlueprintAssignable, Category = "Ship|Vitals")
