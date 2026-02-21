@@ -218,6 +218,15 @@ void UEventRunSubsystem::ApplyRules(const TArray<FConditionalEffectRule>& Rules,
 		Ship->Damage = FMath::Clamp(Ship->Damage + Rule.Effect.DamageDelta, 0, 3);
 		Ship->FoodUnits = FMath::Clamp(Ship->FoodUnits + Rule.Effect.FoodDelta, 0, MaxFoodUnits);
 		Ship->WaterUnits = FMath::Clamp(Ship->WaterUnits + Rule.Effect.WaterDelta, 0, MaxWaterUnits);
+		
+		if (Rule.Effect.FoodDelta != 0 || Rule.Effect.WaterDelta) {
+			Ship->OnSuppliesChanged.Broadcast();
+		}
+		
+		if (Rule.Effect.EnergyDelta != 0 || Rule.Effect.DamageDelta != 0) {
+			Ship->OnShipStateChanged.Broadcast();
+		}
+		
 
 		for (const FText& L : Rule.ExtraLogs)
 			OutLogs.Add(L);
@@ -246,9 +255,26 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 {
 	if (bRunEnded)
 	{
-		OutLogs.Add(FText::FromString(TEXT("Run already ended.")));
+		OutLogs.Add(FText::FromString(TEXT("Run ended.")));
 		return false;
 	}
+	
+	if (Ship->Hunger == 0)
+	{
+		bRunEnded = true;
+		EndReason = FText::FromString(TEXT("GAME OVER: You are starving. You are not able to handle the ship anymore. You drift aimlessly until systems shut down."));
+		OutLogs.Add(EndReason);
+		return false;
+	}
+
+	if (Ship->Thirst == 0)
+	{
+		bRunEnded = true;
+		EndReason = FText::FromString(TEXT("GAME OVER: You are dehydrated. You are not able to handle the ship anymore. You drift aimlessly until systems shut down."));
+		OutLogs.Add(EndReason);
+		return false;
+	}
+
 	if (bWaitingMinigame)
 	{
 		OutLogs.Add(FText::FromString(TEXT("Mini-game in progress. Finish it before choosing.")));
@@ -281,7 +307,7 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 		}
 		else
 		{
-			OutLogs.Add(FText::FromString(TEXT("You drift forward. Nothing happens.")));
+			OutLogs.Add(FText::FromString(TEXT("> You drift forward. Nothing happens.")));
 		}
 	}
 	else
@@ -399,7 +425,6 @@ void UEventRunSubsystem::ResolveMiniGameInternal(EMiniGameResult Result, TArray<
 void UEventRunSubsystem::FinalizeStepAndAdvance(UShipStateComponent* Ship, TArray<FText>& OutLogs)
 {
 	if (!Ship) return;
-
 	Ship->StepsCompleted++;
 	Ship->AdvanceDay(1);
 
@@ -426,6 +451,7 @@ void UEventRunSubsystem::FinalizeStepAndAdvance(UShipStateComponent* Ship, TArra
 		OutLogs.Add(EndReason);
 		return;
 	}
+
 
 	GenerateCurrentNode();
 }

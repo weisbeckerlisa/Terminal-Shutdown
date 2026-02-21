@@ -30,7 +30,7 @@ public:
 	int32 StepsCompleted = 0;
 
 	UFUNCTION(BlueprintCallable, Category = "Ship")
-	bool IsGameOver() const { return Damage >= 3 || Energy < 0; }
+	bool IsGameOver() const { return Damage >= 3 || Energy == 0 || Hunger == 0 || Thirst < 0; }
 
 	UFUNCTION(BlueprintCallable, Category = "Ship")
 	bool IsGameWon() const { return StepsCompleted >= 10; }
@@ -49,22 +49,22 @@ public:
 
 	// Player vitals and supplies
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	int32 FoodUnits = 15; // start at 3, max 16, min 0
+	int32 FoodUnits = 1; // start at 3, max 16, min 0
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	int32 WaterUnits = 16; // start at 3, max 16, min 0
+	int32 WaterUnits = 2; // start at 3, max 16, min 0
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	float Hunger = 100.f; // 0..100
+	float Hunger = 50.f; // 0..100
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	float Thirst = 100.f; // 0..100
+	float Thirst = 50.f; // 0..100
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
 	float HungerPerDay = 15.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	float ThirstPerDay = 30.f;
+	float ThirstPerDay = 25.f;
 	
 	UFUNCTION(BlueprintCallable, Category = "Ship|Vitals")
 	void AdvanceDay(int32 days = 1);
