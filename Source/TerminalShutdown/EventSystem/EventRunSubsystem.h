@@ -31,7 +31,6 @@ struct FRunNode
 	UPROPERTY() EOutcome LockedA = EOutcome::Unknown;
 	UPROPERTY() EOutcome LockedB = EOutcome::Unknown;
 
-	// Optional: store what skip encounter rolled this step
 	UPROPERTY() TObjectPtr<const UEncounterDefinition> SkipEncounter = nullptr;
 };
 
