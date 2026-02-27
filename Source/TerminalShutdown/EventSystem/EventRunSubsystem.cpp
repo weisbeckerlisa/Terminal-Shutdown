@@ -414,12 +414,13 @@ void UEventRunSubsystem::ResolveMiniGameInternal(EMiniGameResult Result, TArray<
 	ApplyOutcome(PendingEncounter, Outcome, Ship, OutLogs);
 
 	bWaitingMinigame = false;
-	OnMiniGameEnded.Broadcast(Result, OutLogs);
+	
 
 	PendingEncounter = nullptr;
 	PendingShip = nullptr;
 
 	FinalizeStepAndAdvance(Ship, OutLogs);
+	OnMiniGameEnded.Broadcast(Result, OutLogs);
 }
 
 void UEventRunSubsystem::FinalizeStepAndAdvance(UShipStateComponent* Ship, TArray<FText>& OutLogs)
@@ -436,7 +437,7 @@ void UEventRunSubsystem::FinalizeStepAndAdvance(UShipStateComponent* Ship, TArra
 		return;
 	}
 
-	if (Ship->Damage >= 3)
+	if (Ship->Damage >= 4)
 	{
 		bRunEnded = true;
 		EndReason = FText::FromString(TEXT("GAME OVER: The ship is too damaged to continue."));

@@ -49,7 +49,7 @@ public:
 
 	// Player vitals and supplies
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	int32 FoodUnits = 1; // start at 3, max 16, min 0
+	int32 FoodUnits = 2; // start at 3, max 16, min 0
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
 	int32 WaterUnits = 2; // start at 3, max 16, min 0
