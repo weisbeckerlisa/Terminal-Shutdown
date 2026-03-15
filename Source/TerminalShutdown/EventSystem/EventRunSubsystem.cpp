@@ -14,6 +14,25 @@ static float Sigmoid(float X)
 	return 1.0f / (1.0f + FMath::Exp(-X));
 }
 
+void UEventRunSubsystem::ResetRunInternal()
+{
+	bRunEnded = false;
+	Reason = EEndReason::None;
+	EndLogs = FText::GetEmpty();
+
+	bWaitingMinigame = false;
+	CurrentMiniGame = FMiniGameContext{};
+
+	PendingEncounter = nullptr;
+	PendingShip = nullptr;
+	PendingSide = EPlanetSide::A;
+
+	if (UWorld* W = GetWorld())
+	{
+		W->GetTimerManager().ClearTimer(MiniGameTimeoutHandle);
+	}
+}
+
 void UEventRunSubsystem::LoadDatabase()
 {
 	if (DB) return;
@@ -37,10 +56,10 @@ void UEventRunSubsystem::StartRun(int32 Seed)
 	LoadDatabase();
 	if (!DB) return;
 
+	ResetRunInternal();
+
 	Rng.Initialize(Seed);
 	Current = FRunNode{};
-	bRunEnded = false;
-	EndReason = FText::GetEmpty();
 	GenerateCurrentNode();
 }
 
@@ -98,7 +117,7 @@ FRunNodeView UEventRunSubsystem::GetCurrentNodeView(UShipStateComponent* Ship) c
 	{
 		FRunNodeView View;
 		View.PlanetA.Label = FText::FromString(TEXT("RUN ENDED"));
-		View.PlanetA.Preview = EndReason;
+		View.PlanetA.Preview = EndLogs;
 		return View;
 	}
 	FRunNodeView View;
@@ -215,7 +234,7 @@ void UEventRunSubsystem::ApplyRules(const TArray<FConditionalEffectRule>& Rules,
 		if (!bMatches) continue;
 
 		Ship->Energy = FMath::Clamp(Ship->Energy + Rule.Effect.EnergyDelta, -5, MaxEnergy);
-		Ship->Damage = FMath::Clamp(Ship->Damage + Rule.Effect.DamageDelta, 0, 3);
+		Ship->Damage = FMath::Clamp(Ship->Damage + Rule.Effect.DamageDelta, 0, MaxDamage);
 		Ship->FoodUnits = FMath::Clamp(Ship->FoodUnits + Rule.Effect.FoodDelta, 0, MaxFoodUnits);
 		Ship->WaterUnits = FMath::Clamp(Ship->WaterUnits + Rule.Effect.WaterDelta, 0, MaxWaterUnits);
 		
@@ -258,20 +277,31 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 		OutLogs.Add(FText::FromString(TEXT("Run ended.")));
 		return false;
 	}
+	LoadDatabase();
+	if (!DB || !Ship) return false;
+	// energy costs
+	const int32 BaseCost = (Choice == ERunChoice::Skip) ? CostSkip : CostLand;
+	const int32 ModuleCost = Ship->ActiveModules.Num();
+	const int32 Cost = BaseCost + ModuleCost;
+	if (Ship->Energy < Cost) return false;
 	
 	if (Ship->Hunger == 0)
 	{
 		bRunEnded = true;
-		EndReason = FText::FromString(TEXT("GAME OVER: You are starving. You are not able to handle the ship anymore. You drift aimlessly until systems shut down."));
-		OutLogs.Add(EndReason);
+		EndLogs = FText::FromString(TEXT("You are starving. You are not able to handle the ship anymore. You drift aimlessly until systems shut down."));
+		OutLogs.Add(EndLogs);
+		Reason = EEndReason::Starvation;
+		OnGameOver.Broadcast(Reason, EndLogs);
 		return false;
 	}
 
 	if (Ship->Thirst == 0)
 	{
 		bRunEnded = true;
-		EndReason = FText::FromString(TEXT("GAME OVER: You are dehydrated. You are not able to handle the ship anymore. You drift aimlessly until systems shut down."));
-		OutLogs.Add(EndReason);
+		EndLogs = FText::FromString(TEXT("You are dehydrated. You are not able to handle the ship anymore. You drift aimlessly until systems shut down."));
+		Reason = EEndReason::Dehydration;
+		OutLogs.Add(EndLogs);
+		OnGameOver.Broadcast(Reason, EndLogs);
 		return false;
 	}
 
@@ -281,14 +311,9 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 		return false;
 	}
 
-	LoadDatabase();
-	if (!DB || !Ship) return false;
 
-	// energy costs
-	const int32 BaseCost = (Choice == ERunChoice::Skip) ? CostSkip : CostLand;
-	const int32 ModuleCost = Ship->ActiveModules.Num();
-	const int32 Cost = BaseCost + ModuleCost;
-	if (Ship->Energy < Cost) return false;
+
+
 	Ship->Energy -= Cost;
 
 	if (Choice == ERunChoice::Skip)
@@ -432,24 +457,30 @@ void UEventRunSubsystem::FinalizeStepAndAdvance(UShipStateComponent* Ship, TArra
 	if (Ship->IsGameWon())
 	{
 		bRunEnded = true;
-		EndReason = FText::FromString(TEXT("MISSION COMPLETE: You reached Earth !"));
-		OutLogs.Add(EndReason);
+		EndLogs = FText::FromString(TEXT("MISSION COMPLETE: You reached Earth !"));
+		OutLogs.Add(EndLogs);
+		Reason = EEndReason::Victory;
+		OnGameOver.Broadcast(Reason, EndLogs);
 		return;
 	}
 
-	if (Ship->Damage >= 4)
+	if (Ship->Damage >= MaxDamage)
 	{
 		bRunEnded = true;
-		EndReason = FText::FromString(TEXT("GAME OVER: The ship is too damaged to continue."));
-		OutLogs.Add(EndReason);
+		EndLogs = FText::FromString(TEXT("The ship is too damaged to continue."));
+		OutLogs.Add(EndLogs);
+		Reason = EEndReason::ShipDestroyed;
+		OnGameOver.Broadcast(Reason, EndLogs);
 		return;
 	}
 
 	if (Ship->Energy <= 0)
 	{
 		bRunEnded = true;
-		EndReason = FText::FromString(TEXT("GAME OVER: You ran out of energy. All systems Shutdown."));
-		OutLogs.Add(EndReason);
+		EndLogs = FText::FromString(TEXT("You ran out of energy. All systems Shutdown."));
+		OutLogs.Add(EndLogs);
+		Reason = EEndReason::EnergyDepleted;
+		OnGameOver.Broadcast(Reason, EndLogs);
 		return;
 	}
 

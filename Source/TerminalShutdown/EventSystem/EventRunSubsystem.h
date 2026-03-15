@@ -15,6 +15,17 @@ class UPlanetDefinition;
 class UEncounterDefinition;
 class UShipStateComponent;
 
+UENUM(BlueprintType)
+enum class EEndReason : uint8
+{
+	None,
+	Victory,
+	ShipDestroyed,
+	EnergyDepleted,
+	Starvation,
+	Dehydration,
+};
+
 USTRUCT()
 struct FRunNode
 {
@@ -36,6 +47,7 @@ struct FRunNode
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMiniGameStarted, const FMiniGameContext&, Context);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnMiniGameEnded, EMiniGameResult, Result, const TArray<FText>&, Logs);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnGameOver, EEndReason, Reason, const FText&, EndLogs);
 
 UCLASS(BlueprintType)
 class TERMINALSHUTDOWN_API UEventRunSubsystem : public UGameInstanceSubsystem
@@ -51,6 +63,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Balancing") int32 MaxEnergy = 20;
 	UPROPERTY(EditAnywhere, Category = "Balancing") int32 MaxFoodUnits = 16;
 	UPROPERTY(EditAnywhere, Category = "Balancing") int32 MaxWaterUnits = 16;
+	UPROPERTY(EditAnywhere, Category = "Balancing") int32 MaxDamage = 4;
 
 	// Costs
 	UPROPERTY(EditAnywhere, Category = "Costs") int32 CostSkip = 1;
@@ -83,13 +96,17 @@ public:
 	UFUNCTION(BlueprintCallable) bool Scout(UShipStateComponent* Ship, EPlanetSide Side, TArray<FText>& OutLogs);
 	UFUNCTION(BlueprintCallable) bool Choose(UShipStateComponent* Ship, ERunChoice Choice, TArray<FText>& OutLogs);
 	UFUNCTION(BlueprintCallable) bool IsRunEnded() const { return bRunEnded; }
-	UFUNCTION(BlueprintCallable) FText GetEndReason() const { return EndReason; }
+	UFUNCTION(BlueprintCallable) FText GetEndReason() const { return EndLogs; }
+
+	UPROPERTY(BlueprintAssignable, Category = "Run")
+	FOnGameOver OnGameOver;
 
 private:
 	UPROPERTY() TObjectPtr<UEventDatabase> DB = nullptr;
 	UPROPERTY() FRunNode Current;
 	UPROPERTY() bool bRunEnded = false;
-	UPROPERTY() FText EndReason;
+	UPROPERTY() FText EndLogs;
+	UPROPERTY() EEndReason Reason = EEndReason::None;
 	FRandomStream Rng;
 
 	UPROPERTY() bool bWaitingMinigame = false;
@@ -111,6 +128,7 @@ private:
 
 	void LoadDatabase();
 	void GenerateCurrentNode();
+	void ResetRunInternal();
 
 	// Resolution helpers
 	float ComputeAdjustedPn(float BasePn, const UShipStateComponent* Ship, float ActionMultiplier) const;
