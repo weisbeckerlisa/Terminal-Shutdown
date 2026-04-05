@@ -28,12 +28,14 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship")
 	int32 StepsCompleted = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Balancing")
+	int32 StepsToEarth = 15;
 
 	UFUNCTION(BlueprintCallable, Category = "Ship")
 	bool IsGameOver() const { return Damage >= 3 || Energy == 0 || Hunger == 0 || Thirst < 0; }
 
 	UFUNCTION(BlueprintCallable, Category = "Ship")
-	bool IsGameWon() const { return StepsCompleted >= 10; }
+	bool IsGameWon() const { return StepsCompleted >= StepsToEarth; }
 
 	// Fired whenever energy/damage/modules/etc change
 	UPROPERTY(BlueprintAssignable, Category = "Ship")
@@ -61,10 +63,10 @@ public:
 	float Thirst = 50.f; // 0..100
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	float HungerPerDay = 15.f;
+	float HungerPerDay = 20.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	float ThirstPerDay = 25.f;
+	float ThirstPerDay = 30.f;
 	
 	UFUNCTION(BlueprintCallable, Category = "Ship|Vitals")
 	void AdvanceDay(int32 days = 1);

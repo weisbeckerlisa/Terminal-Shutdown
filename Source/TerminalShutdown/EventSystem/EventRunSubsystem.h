@@ -60,10 +60,38 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Balancing") float WDmg = 0.6f;      // weight damage
 	UPROPERTY(EditAnywhere, Category = "Balancing") float WEnergy = 0.4f;   // weight energy
 	UPROPERTY(EditAnywhere, Category = "Balancing") float STarget = 0.5f;   // target tension
-	UPROPERTY(EditAnywhere, Category = "Balancing") int32 MaxEnergy = 20;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Balancing") int32 MaxEnergy = 20;
 	UPROPERTY(EditAnywhere, Category = "Balancing") int32 MaxFoodUnits = 16;
 	UPROPERTY(EditAnywhere, Category = "Balancing") int32 MaxWaterUnits = 16;
-	UPROPERTY(EditAnywhere, Category = "Balancing") int32 MaxDamage = 4;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Balancing") int32 MaxDamage = 4;
+
+	//  Fairness / streak control ---
+	UPROPERTY(EditAnywhere, Category = "Balancing")
+	float NegStreakBiasLogit = 0.35f;
+
+	UPROPERTY(EditAnywhere, Category = "Balancing")
+	float PosStreakBiasLogit = 0.12f;
+
+	UPROPERTY(EditAnywhere, Category = "Balancing")
+	int32 MaxStreakCount = 5;
+	UPROPERTY() int32 NegativeStreak = 0;
+	UPROPERTY() int32 PositiveStreak = 0;
+	UPROPERTY() int32 TurnsSinceMiniGame = 0;
+
+	UPROPERTY(EditAnywhere, Category = "Balancing")
+	int32 LowEnergyThreshold = 3;
+
+	UPROPERTY(EditAnywhere, Category = "Balancing")
+	float LowRessourceThreshold = 0.f;
+
+	UPROPERTY(EditAnywhere, Category = "Balancing")
+	int32 MaxRecoveryRerolls = 10;
+
+	float ApplyStreakBiasToLogit(float Logit) const;
+	void UpdateStreaks(EOutcome Outcome);
+
+	bool EncounterHasTag(const UEncounterDefinition* Encounter, const FGameplayTag& Tag) const;
+	bool EncounterHasAnyTag(const UEncounterDefinition* Encounter, const FGameplayTagContainer& Tags) const;
 
 	// Costs
 	UPROPERTY(EditAnywhere, Category = "Costs") int32 CostSkip = 1;
@@ -71,7 +99,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Costs") int32 CostLand = 2;
 
 	// Skip behavior
-	UPROPERTY(EditAnywhere, Category = "Skip") float SkipEncounterChance = 0.4f; // chance an encounter happens on skip
+	UPROPERTY(EditAnywhere, Category = "Skip") float SkipEncounterChance = 0.35f; // chance an encounter happens on skip
 	UPROPERTY(EditAnywhere, Category = "Skip") float SkipBasePn = 0.65f;          // if skip encounter happens, base negative chance
 
 	UPROPERTY(BlueprintAssignable, Category = "MiniGame")
@@ -127,7 +155,7 @@ private:
 	void FinalizeStepAndAdvance(UShipStateComponent* Ship, TArray<FText>& OutLogs);
 
 	void LoadDatabase();
-	void GenerateCurrentNode();
+	void GenerateCurrentNode(UShipStateComponent* Ship);
 	void ResetRunInternal();
 
 	// Resolution helpers

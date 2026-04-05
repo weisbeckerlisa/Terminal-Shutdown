@@ -2,7 +2,6 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
-#include "GameplayTagContainer.h"
 #include "EventEffects.generated.h"
 
 USTRUCT(BlueprintType)

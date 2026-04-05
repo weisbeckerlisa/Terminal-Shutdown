@@ -27,6 +27,10 @@ void UEventRunSubsystem::ResetRunInternal()
 	PendingShip = nullptr;
 	PendingSide = EPlanetSide::A;
 
+	NegativeStreak = 0;
+	PositiveStreak = 0;
+	TurnsSinceMiniGame = 0;
+
 	if (UWorld* W = GetWorld())
 	{
 		W->GetTimerManager().ClearTimer(MiniGameTimeoutHandle);
@@ -51,6 +55,39 @@ void UEventRunSubsystem::LoadDatabase()
 	}
 }
 
+float UEventRunSubsystem::ApplyStreakBiasToLogit(float Logit) const
+{
+	const int32 Neg = FMath::Clamp(NegativeStreak, 0, MaxStreakCount);
+	const int32 Pos = FMath::Clamp(PositiveStreak, 0, MaxStreakCount);
+
+	const float Shift = (PosStreakBiasLogit * (float)Pos) - (NegStreakBiasLogit * (float)Neg);
+	return Logit + Shift;
+}
+
+void UEventRunSubsystem::UpdateStreaks(EOutcome Outcome)
+{
+	if (Outcome == EOutcome::Negative)
+	{
+		NegativeStreak = FMath::Min(NegativeStreak + 1, MaxStreakCount);
+		PositiveStreak = 0;
+	}
+	else if (Outcome == EOutcome::Positive)
+	{
+		PositiveStreak = FMath::Min(PositiveStreak + 1, MaxStreakCount);
+		NegativeStreak = 0;
+	}
+}
+
+bool UEventRunSubsystem::EncounterHasTag(const UEncounterDefinition* Encounter, const FGameplayTag& Tag) const
+{
+	return Encounter && Tag.IsValid() && Encounter->Tags.HasTagExact(Tag);
+}
+
+bool UEventRunSubsystem::EncounterHasAnyTag(const UEncounterDefinition* Encounter, const FGameplayTagContainer& Tags) const
+{
+	return Encounter && Encounter->Tags.HasAnyExact(Tags);
+}
+
 void UEventRunSubsystem::StartRun(int32 Seed)
 {
 	LoadDatabase();
@@ -60,7 +97,7 @@ void UEventRunSubsystem::StartRun(int32 Seed)
 
 	Rng.Initialize(Seed);
 	Current = FRunNode{};
-	GenerateCurrentNode();
+	GenerateCurrentNode(nullptr);
 }
 
 static const UEncounterDefinition* PickEncounterForBiome(
@@ -73,7 +110,7 @@ static const UEncounterDefinition* PickEncounterForBiome(
 	for (const TObjectPtr<UEncounterDefinition>& EPtr : All)
 	{
 		const UEncounterDefinition* E = EPtr.Get();
-		if (E && E->BiomeTag == Biome)
+		if (E && E->Tags.HasTagExact(Biome))
 		{
 			Candidates.Add(E);
 		}
@@ -83,12 +120,31 @@ static const UEncounterDefinition* PickEncounterForBiome(
 	return Candidates[Rng.RandRange(0, Candidates.Num() - 1)];
 }
 
+static const UEncounterDefinition* PickEncounterForBiomeWithTag(
+	const TArray<TObjectPtr<UEncounterDefinition>>& All,
+	const FGameplayTag Biome,
+	const FGameplayTag RequiredTag,
+	FRandomStream& Rng)
+{
+	TArray<const UEncounterDefinition*> Candidates;
 
-void UEventRunSubsystem::GenerateCurrentNode()
+	for (const TObjectPtr<UEncounterDefinition>& EPtr : All)
+	{
+		const UEncounterDefinition* E = EPtr.Get();
+		if (!E) continue;
+		if (!E->Tags.HasTagExact(Biome)) continue;
+		if (RequiredTag.IsValid() && !E->Tags.HasTagExact(RequiredTag)) continue;
+		Candidates.Add(E);
+	}
+
+	if (Candidates.Num() == 0) return nullptr;
+	return Candidates[Rng.RandRange(0, Candidates.Num() - 1)];
+}
+
+void UEventRunSubsystem::GenerateCurrentNode(UShipStateComponent* Ship)
 {
 	if (!DB) return;
 
-	// Pick Planet A/B randomly from DB->Planets
 	if (DB->Planets.Num() < 2)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[EventRunSubsystem] Need at least 2 planets in DB."));
@@ -104,11 +160,76 @@ void UEventRunSubsystem::GenerateCurrentNode()
 
 	Current.PlanetA = DB->Planets[IndexA];
 	Current.PlanetB = DB->Planets[IndexB];
-	Current.EncounterA = PickEncounterForBiome(DB->PlanetEncounters, Current.PlanetA->BiomeTag, Rng);
-	Current.EncounterB = PickEncounterForBiome(DB->PlanetEncounters, Current.PlanetB->BiomeTag, Rng);
+
 	Current.LockedA = EOutcome::Unknown;
 	Current.LockedB = EOutcome::Unknown;
 	Current.SkipEncounter = nullptr;
+
+	const FGameplayTag BiomeA = Current.PlanetA ? Current.PlanetA->BiomeTag : FGameplayTag{};
+	const FGameplayTag BiomeB = Current.PlanetB ? Current.PlanetB->BiomeTag : FGameplayTag{};
+
+	// Balancing constraints
+	// Priority: Recovery > Minigame > None
+	FGameplayTag WantedTag;
+
+	if (Ship)
+	{
+		const bool bNeedEnergy = Ship->Energy <= LowEnergyThreshold;
+		const bool bNeedFood = Ship->FoodUnits <= LowRessourceThreshold;
+		const bool bNeedWater = Ship->WaterUnits <= LowRessourceThreshold;
+
+		if (bNeedEnergy || bNeedFood || bNeedWater)
+		{
+			if (bNeedEnergy)
+				WantedTag = FGameplayTag::RequestGameplayTag(TEXT("Recovery.Energy"));
+			else if (bNeedWater)
+				WantedTag = FGameplayTag::RequestGameplayTag(TEXT("Recovery.Water"));
+			else
+				WantedTag = FGameplayTag::RequestGameplayTag(TEXT("Recovery.Food"));
+		}
+		else if (TurnsSinceMiniGame >= 5)
+		{
+			WantedTag = FGameplayTag::RequestGameplayTag(TEXT("MiniGame"));
+		}
+	}
+
+	//  Try to make EncounterA match WantedTag (fallback to any biome A)
+	//  EncounterB is any biome B, but if A failed, try B.
+	// Helper
+	auto PickNormalA = [&]() { return PickEncounterForBiome(DB->PlanetEncounters, BiomeA, Rng); };
+	auto PickNormalB = [&]() { return PickEncounterForBiome(DB->PlanetEncounters, BiomeB, Rng); };
+
+	const UEncounterDefinition* EA = nullptr;
+	const UEncounterDefinition* EB = nullptr;
+
+	// Making sure the wantedTag isn't always on the same side (for predictability)
+	const bool bTryWantedOnA = WantedTag.IsValid() ? (Rng.FRand() < 0.5f) : true;
+
+
+	if (WantedTag.IsValid())
+	{
+		if (bTryWantedOnA)
+		{
+			EA = PickEncounterForBiomeWithTag(DB->PlanetEncounters, BiomeA, WantedTag, Rng);
+			// fallback: if no match on A, try B
+			if (!EA)
+				EB = PickEncounterForBiomeWithTag(DB->PlanetEncounters, BiomeB, WantedTag, Rng);
+		}
+		else
+		{
+			EB = PickEncounterForBiomeWithTag(DB->PlanetEncounters, BiomeB, WantedTag, Rng);
+			// fallback: if no match on B, try A
+			if (!EB)
+				EA = PickEncounterForBiomeWithTag(DB->PlanetEncounters, BiomeA, WantedTag, Rng);
+		}
+	}
+
+	// Fill remaining with normal biome picks
+	if (!EA) EA = PickNormalA();
+	if (!EB) EB = PickNormalB();
+
+	Current.EncounterA = EA;
+	Current.EncounterB = EB;
 }
 
 FRunNodeView UEventRunSubsystem::GetCurrentNodeView(UShipStateComponent* Ship) const
@@ -178,8 +299,11 @@ float UEventRunSubsystem::ComputeAdjustedPn(float BasePn, const UShipStateCompon
 	// shift
 	const float Delta = ActionMultiplier * K * (STarget - S);
 
+	// streak bias
+	const float L = ApplyStreakBiasToLogit(L0 + Delta);
+
 	// back to probability
-	return Sigmoid(L0 + Delta);
+	return Sigmoid(L);
 }
 
 EOutcome UEventRunSubsystem::RollOutcome(float PnAdjusted, FRandomStream& Stream) const
@@ -214,6 +338,7 @@ bool UEventRunSubsystem::Scout(UShipStateComponent* Ship, EPlanetSide Side, TArr
 	Ship->Energy -= CostScout;
 
 	const float PnAdj = ComputeAdjustedPn(Encounter->BasePn, Ship, 0.7f);
+	UE_LOG(LogTemp, Log, TEXT("[SCOUT] Base Pn: %.2f, Adjusted Pn: %.2f"), Encounter->BasePn, PnAdj);
 	Locked = RollOutcome(PnAdj, Rng);
 
 	const FOutcomeDefinition& Def = (Locked == EOutcome::Negative) ? Encounter->Negative : Encounter->Positive;
@@ -238,17 +363,40 @@ void UEventRunSubsystem::ApplyRules(const TArray<FConditionalEffectRule>& Rules,
 		Ship->FoodUnits = FMath::Clamp(Ship->FoodUnits + Rule.Effect.FoodDelta, 0, MaxFoodUnits);
 		Ship->WaterUnits = FMath::Clamp(Ship->WaterUnits + Rule.Effect.WaterDelta, 0, MaxWaterUnits);
 		
-		if (Rule.Effect.FoodDelta != 0 || Rule.Effect.WaterDelta) {
+		if (Rule.Effect.FoodDelta != 0 || Rule.Effect.WaterDelta != 0) {
 			Ship->OnSuppliesChanged.Broadcast();
 		}
 		
 		if (Rule.Effect.EnergyDelta != 0 || Rule.Effect.DamageDelta != 0) {
 			Ship->OnShipStateChanged.Broadcast();
 		}
-		
 
 		for (const FText& L : Rule.ExtraLogs)
 			OutLogs.Add(L);
+
+		auto AddSigned = [](const TCHAR* Label, int32 V, TArray<FString>& Parts)
+			{
+				if (V == 0) return;
+				const FString Sign = (V > 0) ? TEXT("+") : TEXT("");
+				Parts.Add(FString::Printf(TEXT("%s %s%d"), Label, *Sign, V));
+			};
+
+		TArray<FString> Parts;
+		AddSigned(TEXT("Energy"), Rule.Effect.EnergyDelta, Parts);
+		AddSigned(TEXT("Damage"), Rule.Effect.DamageDelta, Parts);
+		AddSigned(TEXT("Food"), Rule.Effect.FoodDelta, Parts);
+		AddSigned(TEXT("Water"), Rule.Effect.WaterDelta, Parts);
+
+		if (Parts.Num() > 0)
+		{
+			FString Line = TEXT("> ");
+			for (int32 i = 0; i < Parts.Num(); ++i)
+			{
+				if (i > 0) Line += TEXT(" | ");
+				Line += Parts[i];
+			}
+			OutLogs.Add(FText::FromString(Line));
+		}
 
 		Ship->ActiveModules.AppendTags(Rule.Effect.AddTags);
 		for (const FGameplayTag& T : Rule.Effect.RemoveTags)
@@ -311,9 +459,6 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 		return false;
 	}
 
-
-
-
 	Ship->Energy -= Cost;
 
 	if (Choice == ERunChoice::Skip)
@@ -328,6 +473,7 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 			const EOutcome Outcome = RollOutcome(PnAdj, Rng);
 
 			OutLogs.Add(FText::FromString(TEXT("[SKIP EVENT]")));
+			UpdateStreaks(Outcome);
 			ApplyOutcome(Current.SkipEncounter, Outcome, Ship, OutLogs);
 		}
 		else
@@ -340,13 +486,7 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 		const bool bA = (Choice == ERunChoice::PlanetA);
 		const UEncounterDefinition* Encounter = bA ? Current.EncounterA : Current.EncounterB;
 
-		EOutcome Locked = bA ? Current.LockedA : Current.LockedB;
-		if (Locked == EOutcome::Unknown)
-		{
-			const float PnAdj = ComputeAdjustedPn(Encounter->BasePn, Ship, 1.0f);
-			Locked = RollOutcome(PnAdj, Rng);
-		}
-
+		
 		OutLogs.Add(FText::FromString(TEXT("[LANDING]")));
 		if (Encounter && Encounter->MiniGame)
 		{
@@ -356,7 +496,16 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 			return true;
 		}
 
+		EOutcome Locked = bA ? Current.LockedA : Current.LockedB;
+		if (Locked == EOutcome::Unknown)
+		{
+			const float PnAdj = ComputeAdjustedPn(Encounter->BasePn, Ship, 1.0f);
+			UE_LOG(LogTemp, Log, TEXT("[LANDING] Base Pn: %.2f, Adjusted Pn: %.2f"), Encounter->BasePn, PnAdj);
+			Locked = RollOutcome(PnAdj, Rng);
+		}
+
 		// No mini-game: resolve normally
+		UpdateStreaks(Locked);
 		ApplyOutcome(Encounter, Locked, Ship, OutLogs);
 
 	}
@@ -436,6 +585,7 @@ void UEventRunSubsystem::ResolveMiniGameInternal(EMiniGameResult Result, TArray<
 
 	UShipStateComponent* Ship = PendingShip;
 
+	UpdateStreaks(Outcome);
 	ApplyOutcome(PendingEncounter, Outcome, Ship, OutLogs);
 
 	bWaitingMinigame = false;
@@ -453,6 +603,7 @@ void UEventRunSubsystem::FinalizeStepAndAdvance(UShipStateComponent* Ship, TArra
 	if (!Ship) return;
 	Ship->StepsCompleted++;
 	Ship->AdvanceDay(1);
+	TurnsSinceMiniGame++;
 
 	if (Ship->IsGameWon())
 	{
@@ -485,5 +636,5 @@ void UEventRunSubsystem::FinalizeStepAndAdvance(UShipStateComponent* Ship, TArra
 	}
 
 
-	GenerateCurrentNode();
+	GenerateCurrentNode(Ship);
 }

@@ -19,9 +19,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float BasePn = 0.4f;
 
-	// Biome filter
+	// Encounter tags (bio me, recovery, minigame, etc.)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	FGameplayTag BiomeTag;
+	FGameplayTagContainer Tags;
 
 	// General hint shown before scouting/landing
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
