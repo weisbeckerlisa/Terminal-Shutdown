@@ -18,10 +18,10 @@ class TERMINALSHUTDOWN_API UShipStateComponent : public UActorComponent
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship")
-	int32 Damage = 0; // 0..3 (3 is game over)
+	int32 Damage = 0; // 0..4 (4 is game over)
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship")
-	int32 Energy = 10; // start at 10, max 20, <0 is game over
+	int32 Energy = 15; // start at 15, max 30, <0 is game over
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship")
 	FGameplayTagContainer ActiveModules; // e.g. Module.Turret, Module.Shield, Module.Scanner
@@ -32,7 +32,7 @@ public:
 	int32 StepsToEarth = 15;
 
 	UFUNCTION(BlueprintCallable, Category = "Ship")
-	bool IsGameOver() const { return Damage >= 3 || Energy == 0 || Hunger == 0 || Thirst < 0; }
+	bool IsGameOver() const { return Damage >= 4 || Energy == 0 || Hunger == 0 || Thirst < 0; }
 
 	UFUNCTION(BlueprintCallable, Category = "Ship")
 	bool IsGameWon() const { return StepsCompleted >= StepsToEarth; }
@@ -51,22 +51,22 @@ public:
 
 	// Player vitals and supplies
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	int32 FoodUnits = 2; // max 16, min 0
+	int32 FoodUnits = 3; // max 16, min 0
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	int32 WaterUnits = 2; // max 16, min 0
+	int32 WaterUnits = 3; // max 16, min 0
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	float Hunger = 50.f; // 0..100
+	float Hunger = 75.f; // 0..100
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	float Thirst = 50.f; // 0..100
+	float Thirst = 75.f; // 0..100
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	float HungerPerDay = 20.f;
+	float HungerPerDay = 15.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ship|Vitals")
-	float ThirstPerDay = 30.f;
+	float ThirstPerDay = 20.f;
 	
 	UFUNCTION(BlueprintCallable, Category = "Ship|Vitals")
 	void AdvanceDay(int32 days = 1);

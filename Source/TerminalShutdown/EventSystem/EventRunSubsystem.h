@@ -60,17 +60,17 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Balancing") float WDmg = 0.6f;      // weight damage
 	UPROPERTY(EditAnywhere, Category = "Balancing") float WEnergy = 0.4f;   // weight energy
 	UPROPERTY(EditAnywhere, Category = "Balancing") float STarget = 0.5f;   // target tension
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Balancing") int32 MaxEnergy = 20;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Balancing") int32 MaxEnergy = 30;
 	UPROPERTY(EditAnywhere, Category = "Balancing") int32 MaxFoodUnits = 16;
 	UPROPERTY(EditAnywhere, Category = "Balancing") int32 MaxWaterUnits = 16;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Balancing") int32 MaxDamage = 4;
 
-	//  Fairness / streak control ---
+	// Fairness / streak control
 	UPROPERTY(EditAnywhere, Category = "Balancing")
 	float NegStreakBiasLogit = 0.35f;
 
 	UPROPERTY(EditAnywhere, Category = "Balancing")
-	float PosStreakBiasLogit = 0.12f;
+	float PosStreakBiasLogit = 0.1f;
 
 	UPROPERTY(EditAnywhere, Category = "Balancing")
 	int32 MaxStreakCount = 5;
@@ -79,10 +79,10 @@ public:
 	UPROPERTY() int32 TurnsSinceMiniGame = 0;
 
 	UPROPERTY(EditAnywhere, Category = "Balancing")
-	int32 LowEnergyThreshold = 3;
+	int32 LowEnergyThreshold = 4;
 
 	UPROPERTY(EditAnywhere, Category = "Balancing")
-	float LowRessourceThreshold = 0.f;
+	float LowRessourceThreshold = 1.f;
 
 	UPROPERTY(EditAnywhere, Category = "Balancing")
 	int32 MaxRecoveryRerolls = 10;
