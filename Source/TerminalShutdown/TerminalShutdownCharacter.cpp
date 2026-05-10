@@ -91,9 +91,10 @@ void ATerminalShutdownCharacter::DoAim(float Yaw, float Pitch)
 {
 	if (GetController())
 	{
+		float multiplier = 0.3f;
 		// pass the rotation inputs
-		AddControllerYawInput(Yaw);
-		AddControllerPitchInput(Pitch);
+		AddControllerYawInput(Yaw*multiplier);
+		AddControllerPitchInput(Pitch*multiplier);
 	}
 }
 

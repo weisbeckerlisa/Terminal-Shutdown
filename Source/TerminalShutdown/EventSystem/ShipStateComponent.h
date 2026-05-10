@@ -7,6 +7,7 @@
 
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnShipStateChanged);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnShipModulesChanged);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnVitalsChanged);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnSuppliesChanged);
 
@@ -32,7 +33,7 @@ public:
 	int32 StepsToEarth = 15;
 
 	UFUNCTION(BlueprintCallable, Category = "Ship")
-	bool IsGameOver() const { return Damage >= 4 || Energy == 0 || Hunger == 0 || Thirst < 0; }
+	bool IsGameOver() const { return Damage >= 4 || Energy == 0 || Hunger < 0 || Thirst < 0; }
 
 	UFUNCTION(BlueprintCallable, Category = "Ship")
 	bool IsGameWon() const { return StepsCompleted >= StepsToEarth; }
@@ -40,6 +41,11 @@ public:
 	// Fired whenever energy/damage/modules/etc change
 	UPROPERTY(BlueprintAssignable, Category = "Ship")
 	FOnShipStateChanged OnShipStateChanged;
+
+	// Fired whenever modules change
+	UPROPERTY(BlueprintAssignable, Category = "Ship")
+	FOnShipModulesChanged OnShipModulesChanged;
+
 
 	// Toggle/force a module state and notify listeners
 	UFUNCTION(BlueprintCallable, Category = "Ship|Modules")

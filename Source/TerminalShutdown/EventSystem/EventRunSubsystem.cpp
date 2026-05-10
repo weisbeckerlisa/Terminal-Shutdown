@@ -141,6 +141,24 @@ static const UEncounterDefinition* PickEncounterForBiomeWithTag(
 	return Candidates[Rng.RandRange(0, Candidates.Num() - 1)];
 }
 
+static bool HasEncounterForBiomeWithTag(
+	const TArray<TObjectPtr<UEncounterDefinition>>& All,
+	const FGameplayTag Biome,
+	const FGameplayTag Tag)
+{
+	if (!Biome.IsValid() || !Tag.IsValid()) return false;
+
+	for (const TObjectPtr<UEncounterDefinition>& EPtr : All)
+	{
+		const UEncounterDefinition* E = EPtr.Get();
+		if (!E) continue;
+		if (!E->Tags.HasTagExact(Biome)) continue;
+		if (!E->Tags.HasTagExact(Tag)) continue;
+		return true;
+	}
+	return false;
+}
+
 void UEventRunSubsystem::GenerateCurrentNode(UShipStateComponent* Ship)
 {
 	if (!DB) return;
@@ -168,63 +186,104 @@ void UEventRunSubsystem::GenerateCurrentNode(UShipStateComponent* Ship)
 	const FGameplayTag BiomeA = Current.PlanetA ? Current.PlanetA->BiomeTag : FGameplayTag{};
 	const FGameplayTag BiomeB = Current.PlanetB ? Current.PlanetB->BiomeTag : FGameplayTag{};
 
-	// Balancing constraints
-	// Priority: Recovery > Minigame > None
-	FGameplayTag WantedTag;
+	// We can offer up to 2 tags (primary + secondary), in priority order.
+	// Priority: Energy > Water > Food > MiniGame
+	FGameplayTag PrimaryTag;
+	FGameplayTag SecondaryTag;
+
+	auto ConsiderTag = [&](const FGameplayTag& T)
+		{
+			if (!T.IsValid()) return;
+			if (!PrimaryTag.IsValid()) { PrimaryTag = T; return; }
+			if (!SecondaryTag.IsValid() && !T.MatchesTagExact(PrimaryTag)) { SecondaryTag = T; return; }
+		};
 
 	if (Ship)
 	{
 		const bool bNeedEnergy = Ship->Energy <= LowEnergyThreshold;
-		const bool bNeedFood = Ship->FoodUnits <= LowRessourceThreshold;
 		const bool bNeedWater = Ship->WaterUnits <= LowRessourceThreshold;
+		const bool bNeedFood = Ship->FoodUnits <= LowRessourceThreshold;
 
-		if (bNeedEnergy || bNeedFood || bNeedWater)
+		// Add in strict priority order
+		if (bNeedEnergy) ConsiderTag(FGameplayTag::RequestGameplayTag(TEXT("Recovery.Energy")));
+		if (bNeedWater)  ConsiderTag(FGameplayTag::RequestGameplayTag(TEXT("Recovery.Water")));
+		if (bNeedFood)   ConsiderTag(FGameplayTag::RequestGameplayTag(TEXT("Recovery.Food")));
+
+		// Minigame if we still have a slot
+		if (TurnsSinceMiniGame >= 4)
 		{
-			if (bNeedEnergy)
-				WantedTag = FGameplayTag::RequestGameplayTag(TEXT("Recovery.Energy"));
-			else if (bNeedWater)
-				WantedTag = FGameplayTag::RequestGameplayTag(TEXT("Recovery.Water"));
-			else
-				WantedTag = FGameplayTag::RequestGameplayTag(TEXT("Recovery.Food"));
-		}
-		else if (TurnsSinceMiniGame >= 5)
-		{
-			WantedTag = FGameplayTag::RequestGameplayTag(TEXT("MiniGame"));
+			ConsiderTag(FGameplayTag::RequestGameplayTag(TEXT("MiniGame")));
 		}
 	}
 
-	//  Try to make EncounterA match WantedTag (fallback to any biome A)
-	//  EncounterB is any biome B, but if A failed, try B.
-	// Helper
-	auto PickNormalA = [&]() { return PickEncounterForBiome(DB->PlanetEncounters, BiomeA, Rng); };
-	auto PickNormalB = [&]() { return PickEncounterForBiome(DB->PlanetEncounters, BiomeB, Rng); };
+	// Decide which side tries which tag (randomize to avoid predictability)
+	FGameplayTag TagForA;
+	FGameplayTag TagForB;
 
-	const UEncounterDefinition* EA = nullptr;
-	const UEncounterDefinition* EB = nullptr;
+	// First, see which tags are available per biome
+	const bool bAHasPrimary = PrimaryTag.IsValid() && HasEncounterForBiomeWithTag(DB->PlanetEncounters, BiomeA, PrimaryTag);
+	const bool bBHasPrimary = PrimaryTag.IsValid() && HasEncounterForBiomeWithTag(DB->PlanetEncounters, BiomeB, PrimaryTag);
+	const bool bAHasSecond = SecondaryTag.IsValid() && HasEncounterForBiomeWithTag(DB->PlanetEncounters, BiomeA, SecondaryTag);
+	const bool bBHasSecond = SecondaryTag.IsValid() && HasEncounterForBiomeWithTag(DB->PlanetEncounters, BiomeB, SecondaryTag);
 
-	// Making sure the wantedTag isn't always on the same side (for predictability)
-	const bool bTryWantedOnA = WantedTag.IsValid() ? (Rng.FRand() < 0.5f) : true;
-
-
-	if (WantedTag.IsValid())
+	// If we have 2 tags, try to split them across A/B if possible.
+	if (PrimaryTag.IsValid() && SecondaryTag.IsValid())
 	{
-		if (bTryWantedOnA)
+		const bool bSwap = (Rng.FRand() < 0.5f);
+
+		// Prefer assignment that satisfies both if possible.
+		// Try (A=Primary,B=Second) and (A=Second,B=Primary), pick a valid one.
+		const bool bOption1Ok = bAHasPrimary && bBHasSecond;
+		const bool bOption2Ok = bAHasSecond && bBHasPrimary;
+
+		if (bOption1Ok && bOption2Ok)
 		{
-			EA = PickEncounterForBiomeWithTag(DB->PlanetEncounters, BiomeA, WantedTag, Rng);
-			// fallback: if no match on A, try B
-			if (!EA)
-				EB = PickEncounterForBiomeWithTag(DB->PlanetEncounters, BiomeB, WantedTag, Rng);
+			TagForA = bSwap ? SecondaryTag : PrimaryTag;
+			TagForB = bSwap ? PrimaryTag : SecondaryTag;
+		}
+		else if (bOption1Ok)
+		{
+			TagForA = PrimaryTag;
+			TagForB = SecondaryTag;
+		}
+		else if (bOption2Ok)
+		{
+			TagForA = SecondaryTag;
+			TagForB = PrimaryTag;
 		}
 		else
 		{
-			EB = PickEncounterForBiomeWithTag(DB->PlanetEncounters, BiomeB, WantedTag, Rng);
-			// fallback: if no match on B, try A
-			if (!EB)
-				EA = PickEncounterForBiomeWithTag(DB->PlanetEncounters, BiomeA, WantedTag, Rng);
+			// Can't satisfy both across biomes. Fall back:
+			// Put Primary where it exists, and Secondary where it exists, otherwise none.
+			if (bAHasPrimary) TagForA = PrimaryTag;
+			else if (bBHasPrimary) TagForB = PrimaryTag;
+
+			if (bAHasSecond && !TagForA.IsValid()) TagForA = SecondaryTag;
+			else if (bBHasSecond && !TagForB.IsValid()) TagForB = SecondaryTag;
 		}
 	}
+	else if (PrimaryTag.IsValid())
+	{
+		// Only one tag: apply it to one side randomly, but only if biome supports it.
+		const bool bTryA = (Rng.FRand() < 0.5f);
+		if (bTryA && bAHasPrimary) TagForA = PrimaryTag;
+		else if (!bTryA && bBHasPrimary) TagForB = PrimaryTag;
+		else if (bAHasPrimary) TagForA = PrimaryTag;
+		else if (bBHasPrimary) TagForB = PrimaryTag;
+	}
 
-	// Fill remaining with normal biome picks
+	// Now pick encounters with the per-side tag if any, otherwise normal biome pick.
+	auto PickNormalA = [&]() { return PickEncounterForBiome(DB->PlanetEncounters, BiomeA, Rng); };
+	auto PickNormalB = [&]() { return PickEncounterForBiome(DB->PlanetEncounters, BiomeB, Rng); };
+
+	const UEncounterDefinition* EA = TagForA.IsValid()
+		? PickEncounterForBiomeWithTag(DB->PlanetEncounters, BiomeA, TagForA, Rng)
+		: nullptr;
+
+	const UEncounterDefinition* EB = TagForB.IsValid()
+		? PickEncounterForBiomeWithTag(DB->PlanetEncounters, BiomeB, TagForB, Rng)
+		: nullptr;
+
 	if (!EA) EA = PickNormalA();
 	if (!EB) EB = PickNormalB();
 
@@ -440,7 +499,7 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 		OutLogs.Add(EndLogs);
 		Reason = EEndReason::Starvation;
 		OnGameOver.Broadcast(Reason, EndLogs);
-		return false;
+		return true;
 	}
 
 	if (Ship->Thirst == 0)
@@ -450,7 +509,7 @@ bool UEventRunSubsystem::Choose(UShipStateComponent* Ship, ERunChoice Choice, TA
 		Reason = EEndReason::Dehydration;
 		OutLogs.Add(EndLogs);
 		OnGameOver.Broadcast(Reason, EndLogs);
-		return false;
+		return true;
 	}
 
 	if (bWaitingMinigame)
@@ -593,6 +652,7 @@ void UEventRunSubsystem::ResolveMiniGameInternal(EMiniGameResult Result, TArray<
 
 	PendingEncounter = nullptr;
 	PendingShip = nullptr;
+	TurnsSinceMiniGame = 0;
 
 	FinalizeStepAndAdvance(Ship, OutLogs);
 	OnMiniGameEnded.Broadcast(Result, OutLogs);

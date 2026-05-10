@@ -67,10 +67,10 @@ public:
 
 	// Fairness / streak control
 	UPROPERTY(EditAnywhere, Category = "Balancing")
-	float NegStreakBiasLogit = 0.35f;
+	float NegStreakBiasLogit = 0.32f;
 
 	UPROPERTY(EditAnywhere, Category = "Balancing")
-	float PosStreakBiasLogit = 0.1f;
+	float PosStreakBiasLogit = 0.13f;
 
 	UPROPERTY(EditAnywhere, Category = "Balancing")
 	int32 MaxStreakCount = 5;

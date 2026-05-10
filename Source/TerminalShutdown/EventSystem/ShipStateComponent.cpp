@@ -14,7 +14,7 @@ void UShipStateComponent::SetModuleEnabled(FGameplayTag ModuleTag, bool bEnabled
 		if (!bAlreadyEnabled)
 		{
 			ActiveModules.AddTag(ModuleTag);
-			OnShipStateChanged.Broadcast();
+			OnShipModulesChanged.Broadcast();
 		}
 	}
 	else
@@ -22,7 +22,7 @@ void UShipStateComponent::SetModuleEnabled(FGameplayTag ModuleTag, bool bEnabled
 		if (bAlreadyEnabled)
 		{
 			ActiveModules.RemoveTag(ModuleTag);
-			OnShipStateChanged.Broadcast();
+			OnShipModulesChanged.Broadcast();
 		}
 	}
 }
